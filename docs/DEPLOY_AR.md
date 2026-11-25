@@ -60,3 +60,9 @@ python3 tools/build-config.py --worker-url https://رابط-الworker
 2. أكمل `public/privacy.html` ببياناتك القانونية.
 3. اضبط `SITE_DOMAIN` في `render.yaml` على نطاقك النهائي.
 4. أضف رابط الموقع الجديد في `ALLOWED_ORIGIN` للـ Worker وفي Supabase → Authentication → URL Configuration.
+
+---
+## ملاحظة: تحميل الصور على الهاتف (/media)
+الصور تُطلب الآن من `/media/…` على نفس نطاق الموقع، وRender يمرّرها إلى Worker عبر `routes` في `render.yaml`.
+إن كانت الخدمة منشأة يدوياً (ليست Blueprint) أضف في Render ← Redirects/Rewrites:
+`/media/*` ← Rewrite ← `https://auto-granato-upload.goko07339.workers.dev/images/*`

@@ -45,7 +45,13 @@ header.solid{background:rgba(7,7,10,.92)}
 [dir=rtl] .eyebrow{letter-spacing:0;font-size:14px}
 .eyebrow::before{content:"";display:inline-block;width:40px;height:2px;background:var(--sa-red);vertical-align:middle;margin-inline-end:14px}
 .hero h1{font-family:var(--font-heading);font-size:clamp(46px,7.4vw,98px);line-height:1.06;margin:22px 0;font-weight:800;font-style:italic;letter-spacing:-.5px}
-[dir=rtl] .hero h1,[dir=rtl] .section-title{font-style:normal;font-weight:900;letter-spacing:0;line-height:1.25}
+[dir=rtl] .hero h1,[dir=rtl] .section-title{font-style:normal;font-weight:700;letter-spacing:0;line-height:1.35}
+[dir=rtl] .hero-copy,[dir=rtl] .step p,[dir=rtl] .value span{line-height:2}
+[dir=rtl] .navlinks a{font-size:15px;font-weight:500}
+[dir=rtl] .car-info h3{font-weight:700;line-height:1.4}
+[dir=rtl] .step h3,[dir=rtl] .value b,[dir=rtl] .card-form h3{font-weight:700}
+[dir=rtl] .hero-btn,[dir=rtl] .ghost-btn,[dir=rtl] .outline,[dir=rtl] .filter,[dir=rtl] .nav-call{font-weight:600}
+[dir=rtl] .marquee span{font-weight:600}
 .hero h1 em,.section-title em{color:var(--sa-red);font-style:inherit;position:relative}
 .hero h1 em{background:linear-gradient(180deg,#ff4a52,var(--sa-red) 60%,var(--sa-red-dark));-webkit-background-clip:text;background-clip:text;color:transparent}
 .hero-copy{font-size:18px;line-height:1.8;color:#d2d3d9;max-width:540px}

@@ -10,8 +10,8 @@
   --border-color: rgba(0,0,0,0.10);
   --shadow-sm: 0 2px 8px rgba(0,0,0,0.06);
   --shadow-md: 0 14px 34px rgba(0,0,0,0.12);
-  --font-heading: 'Exo 2', 'Cairo', sans-serif;
-  --font-body: 'DM Sans', 'Cairo', sans-serif;
+  --font-heading: 'Exo 2', 'Readex Pro', 'IBM Plex Sans Arabic', sans-serif;
+  --font-body: 'DM Sans', 'IBM Plex Sans Arabic', sans-serif;
 }
 [data-theme="dark"] {
   --sa-chrome: #c9cbd2;
@@ -25,8 +25,8 @@
   --shadow-md: 0 14px 34px rgba(0,0,0,0.6);
 }
 [dir="rtl"] {
-  --font-heading: 'Cairo', sans-serif;
-  --font-body: 'Cairo', sans-serif;
+  --font-heading: 'Readex Pro','IBM Plex Sans Arabic','Segoe UI',Tahoma,'Noto Sans Arabic','Geeza Pro',Arial,sans-serif;
+  --font-body: 'IBM Plex Sans Arabic','Segoe UI',Tahoma,'Noto Sans Arabic','Geeza Pro',Arial,sans-serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -37,3 +37,15 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 ::selection { background: var(--sa-red); color: #fff; }
+
+/* ===== Arabic typography (professional) ===== */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { text-rendering: optimizeLegibility; font-kerning: normal; font-synthesis: none; }
+[dir="rtl"] body { line-height: 1.85; font-weight: 400; font-feature-settings: "kern" 1, "liga" 1, "calt" 1; }
+[dir="rtl"] h1, [dir="rtl"] h2, [dir="rtl"] h3, [dir="rtl"] h4 { font-family: var(--font-heading); line-height: 1.4; font-weight: 700; }
+[dir="rtl"] h1 { line-height: 1.3; }
+/* Arabic letters must stay joined: never letter-space or italicise them */
+[dir="rtl"] body *:not(.stars):not(.stars *) { letter-spacing: 0 !important; font-style: normal !important; }
+[dir="rtl"] input, [dir="rtl"] select, [dir="rtl"] textarea, [dir="rtl"] button { font-family: var(--font-body); }
+/* numbers & phone stay LTR and use the Latin font so digits look crisp */
+[dir="rtl"] [dir="ltr"], [dir="rtl"] .price, [dir="rtl"] .stats b, [dir="rtl"] .avg { font-family: 'DM Sans','IBM Plex Sans Arabic',sans-serif; }

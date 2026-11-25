@@ -1,12 +1,24 @@
 import { t, tr, money as fmtMoney, locale, getLang } from './i18n.js';
-import { workerUrl } from './supabase.js';
+import { workerUrl, withRetry } from './client.js';
 import { SITE, waLink } from './site-config.js';
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = n => fmtMoney(n) || t('onRequest');
-const imgUrl = r => r?.image_url || (r?.storage_key && workerUrl ? `${workerUrl}/images/${r.storage_key.replace(/^images\//, '')}` : '');
-const photos = car => (car.car_images || []).slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map(imgUrl).filter(Boolean);
+// الصور تُطلب أولاً من نفس نطاق الموقع (/media/…) فلا تتأثر بحجب workers.dev في بعض شبكات الهاتف،
+// وإن فشلت نرجع للرابط المباشر ثم لشعار المعرض.
+const fileOf = r => { const m = /images\/([a-f0-9-]+\.(?:jpg|png|webp|avif))/i.exec(r?.storage_key || r?.image_url || ''); return m ? m[1] : ''; };
+const direct = r => r?.image_url || (r?.storage_key && workerUrl ? `${workerUrl}/images/${r.storage_key.replace(/^images\//, '')}` : '');
+const imgUrl = r => { const f = fileOf(r); return f ? { src: `/media/${f}`, alt: direct(r) } : { src: direct(r), alt: '' }; };
+const photoObjs = car => (car.car_images || []).slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map(imgUrl).filter(o => o.src);
+const photos = car => photoObjs(car).map(o => o.src);
+const altOf = car => Object.fromEntries(photoObjs(car).map(o => [o.src, o.alt]));
+document.addEventListener('error', e => {
+  const i = e.target; if (!i || i.tagName !== 'IMG' || i.classList.contains('ph')) return;
+  const alt = i.dataset.alt;
+  if (alt && !i.dataset.tried) { i.dataset.tried = '1'; i.src = alt; return; }
+  i.onerror = null; i.classList.add('ph'); i.removeAttribute('srcset'); i.src = '/sidahmed-logo-crop.png';
+}, true);
 const chips = car => [car.year, car.mileage != null && `${Number(car.mileage).toLocaleString(locale())} km`, tr('fuel', car.fuel), tr('gear', car.transmission)].filter(Boolean);
 const PH = '<img class="ph" src="sidahmed-logo-crop.png" alt="Sidahmed-auto">';
 
@@ -23,7 +35,7 @@ export async function initGallery(supabase) {
     grid.innerHTML = list.length ? list.map(c => {
       const p = photos(c), name = `${c.brand} ${c.model}`;
       return `<article class="car-card" data-id="${esc(c.id)}" tabindex="0" role="button" aria-label="${esc(name)}">
-        <div class="car-img">${p[0] ? `<img src="${esc(p[0])}" alt="${esc(name)}" loading="lazy">` : PH}
+        <div class="car-img">${p[0] ? `<img src="${esc(p[0])}" data-alt="${esc(altOf(c)[p[0]] || '')}" alt="${esc(name)}" loading="lazy" decoding="async">` : PH}
           ${c.category ? `<span class="tag">${esc(tr('cat', c.category))}</span>` : ''}</div>
         <div class="car-info"><h3>${esc(c.brand)}<small>${esc(c.model)}</small></h3>
           <div class="chips">${chips(c).map(x => `<span>${esc(x)}</span>`).join('')}</div>
@@ -48,9 +60,19 @@ export async function initGallery(supabase) {
   };
 
   grid.innerHTML = '<div class="skeleton"></div>'.repeat(3);
-  const { data, error } = await supabase.from('cars').select('*, car_images(*)').eq('status', 'published').order('created_at', { ascending: false });
-  if (error || !data) { grid.innerHTML = `<p class="state">${t('loadErr')}</p>`; }
-  else { cars = data; render(); const n = $('#statCars'); if (n) n.textContent = cars.length; }
+  const CK = 'sa-cars-cache';
+  const loadCars = async () => {
+    const { data, error } = await withRetry(() => supabase.from('cars').select('*, car_images(*)').eq('status', 'published').order('created_at', { ascending: false }));
+    if (!error && data) { cars = data; try { sessionStorage.setItem(CK, JSON.stringify(data)); } catch {} }
+    else { try { cars = JSON.parse(sessionStorage.getItem(CK) || '[]'); } catch { cars = []; } }
+    if (error && !cars.length) {
+      grid.innerHTML = `<div class="state"><p>${t('loadErr')}</p><button type="button" class="outline" id="retryCars" style="margin-top:16px">↻ ${getLang() === 'ar' ? 'إعادة المحاولة' : getLang() === 'fr' ? 'Réessayer' : 'Retry'}</button></div>`;
+      $('#retryCars').onclick = () => { grid.innerHTML = '<div class="skeleton"></div>'.repeat(3); loadCars(); };
+      return;
+    }
+    render(); const n = $('#statCars'); if (n) n.textContent = cars.length;
+  };
+  await loadCars();
 
   const deep = /^#auto=(.+)$/.exec(location.hash); if (deep) setTimeout(() => open(decodeURIComponent(deep[1])), 300);
   $('#filters').addEventListener('click', e => {
@@ -65,8 +87,8 @@ export async function initGallery(supabase) {
   function fillModal(id) {
     const c = cars.find(x => String(x.id) === id); if (!c) return;
     const p = photos(c), name = `${c.brand} ${c.model}`;
-    const show = u => { $('#modalImg').src = u; $('#modalImg').alt = name; $('#modalThumbs').querySelectorAll('img').forEach(i => i.classList.toggle('on', i.dataset.u === u)); };
-    $('#modalThumbs').innerHTML = p.length > 1 ? p.map(u => `<img src="${esc(u)}" data-u="${esc(u)}" alt="">`).join('') : '';
+    const show = u => { const mi = $('#modalImg'); mi.dataset.alt = altOf(c)[u] || ''; delete mi.dataset.tried; mi.classList.remove('ph'); mi.src = u; $('#modalImg').alt = name; $('#modalThumbs').querySelectorAll('img').forEach(i => i.classList.toggle('on', i.dataset.u === u)); };
+    $('#modalThumbs').innerHTML = p.length > 1 ? p.map(u => `<img src="${esc(u)}" data-u="${esc(u)}" data-alt="${esc(altOf(c)[u] || '')}" alt="" decoding="async">`).join('') : '';
     $('#modalThumbs').onclick = e => e.target.dataset?.u && show(e.target.dataset.u);
     $('#modalImg').classList.toggle('ph', !p.length); if (p.length) show(p[0]); else { $('#modalImg').src = 'sidahmed-logo-crop.png'; $('#modalImg').alt = name; }
     $('#modalTitle').textContent = name; $('#modalPrice').textContent = money(c.price);
@@ -96,7 +118,7 @@ export async function initGallery(supabase) {
   const closeReq = () => { rq.classList.remove('open'); document.body.style.overflow = ''; };
   function openRequest(c) {
     cur = c; const p = photos(c), name = `${c.brand} ${c.model}`;
-    $('#reqCar').innerHTML = `<div class="rc-img">${p[0] ? `<img src="${esc(p[0])}" alt="">` : PH}</div>
+    $('#reqCar').innerHTML = `<div class="rc-img">${p[0] ? `<img src="${esc(p[0])}" data-alt="${esc(altOf(c)[p[0]] || '')}" alt="">` : PH}</div>
       <h3>${esc(name)}</h3><div class="chips">${chips(c).map(x => `<span>${esc(x)}</span>`).join('')}</div>
       <div class="rc-price">${esc(money(c.price))}</div>`;
     $('#reqMain').hidden = false; $('#reqDone').hidden = true; $('#reqStatus').textContent = '';
@@ -141,7 +163,7 @@ export async function initGallery(supabase) {
   submit('#reviewForm', '#reviewStatus', 'reviews', fd => ({ display_name: fd.get('display_name').trim(), rating: Number(fd.get('rating')), comment: fd.get('comment').trim() }), 'okRev');
 
   // ---- Recensioni approvate ----
-  const res = await supabase.from('reviews').select('id,display_name,rating,comment,created_at').eq('approved', true).order('created_at', { ascending: false }).limit(60);
+  const res = await withRetry(() => supabase.from('reviews').select('id,display_name,rating,comment,created_at').eq('approved', true).order('created_at', { ascending: false }).limit(60), 2);
   revs = res.data || [];
   renderReviews();
   const sr = $('#statReviews'), sg = $('#statRating');

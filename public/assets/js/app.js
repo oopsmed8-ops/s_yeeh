@@ -1,4 +1,4 @@
-import { supabase } from './supabase.js';
+import { getClient } from './client.js';
 import './home-i18n.js';
 import { applyLanguage, getLang } from './i18n.js';
 import { initTheme } from './theme.js';
@@ -49,6 +49,6 @@ const boot = () => {
   document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 
   initMap();
-  initGallery(supabase);
+  getClient().then(initGallery);
 };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
