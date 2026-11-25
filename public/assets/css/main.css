@@ -259,3 +259,23 @@ fieldset{border:0;display:grid;gap:8px}legend{font-size:13px;color:var(--text-se
 }
 @media(max-width:560px){.process{grid-template-columns:1fr}.values{grid-template-columns:1fr}.cars-grid{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.reveal{opacity:1;transform:none}.hero-car path{stroke-dashoffset:0}}
+
+/* ===== Mobile hardening (public) ===== */
+html,body{max-width:100%;overflow-x:hidden}
+img,video,svg{max-width:100%}
+.nav>*{min-width:0}
+.nav>a:first-child img,.brand img,.logo img{max-width:100%;height:auto}
+.card-form,.card-form *{min-width:0}
+.card-form input,.card-form select,.card-form textarea{width:100%;max-width:100%}
+p,h1,h2,h3,h4,li,blockquote,.car-info h3{overflow-wrap:anywhere}
+@media(max-width:420px){
+  .nav{gap:8px}.navright{gap:6px;flex-shrink:0}
+  .theme-toggle,.language-select,.menu,.nav-call{padding:8px 10px;font-size:13px}
+  .card-form .hero-btn,.card-form button[type=submit],.card-form .ghost-btn,.card-form .outline{width:100%;text-align:center;justify-content:center}
+}
+@media(max-width:350px){
+  .nav{gap:4px}.navright{gap:4px}
+  .theme-toggle,.language-select,.menu,.nav-call{padding:7px 8px}
+  .language-select{max-width:58px}
+  .nav>a:first-child{flex:1 1 auto;min-width:0;max-width:110px}
+}

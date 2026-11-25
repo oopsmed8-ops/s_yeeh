@@ -3,6 +3,8 @@ import { supabase, workerUrl } from './supabase.js';
 import { initI18n, t, tr, money as fmtMoney, locale, applyLanguage, updateThemeLabel, LANGS } from './i18n.js';
 import { SITE } from './site-config.js';
 import { initInbox, loadInbox, setCarOpener } from './admin-inbox.js';
+import { mediaAttrs, installImgFallback } from './media.js';
+installImgFallback();
 
 /* ========== Utilities ========== */
 function esc(str) {
@@ -377,14 +379,14 @@ function renderCarsTable() {
     }
 
     tbody.innerHTML = adminCars.map(car => {
-                const img = (car.car_images && car.car_images[0]) ? car.car_images[0].image_url : '';
+                const img = sortedImgs(car)[0] || null;
                 const sKey = car.status === 'published' ? 'published' : car.status === 'sold' ? 'sold' : 'draft';
                 // نضع صورة تحميل مؤقتة (skeleton) حتى تظهر الصورة الحقيقية
                 return `
       <tr data-id="${esc(car.id)}">
         <td>
           <div class="img-loading-wrap">
-            ${img ? `<img src="${esc(img)}" class="car-thumb lazy-img" alt="" loading="lazy" onload="this.classList.add('loaded')" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">` : ''}
+            ${img ? `<img ${mediaAttrs(img)} class="car-thumb lazy-img" alt="" loading="lazy" decoding="async">` : ''}
             <div class="car-thumb img-placeholder" style="${img ? 'display:none;' : ''}background:var(--sa-bg-surface-hover);align-items:center;justify-content:center;font-size:9px;color:var(--sa-text-muted);">N/A</div>
           </div>
         </td>
@@ -490,6 +492,7 @@ function bindEditor() {
       carForm.reset();
       carForm.querySelectorAll('select option[data-legacy]').forEach(o => o.remove());
       carForm.elements.id.value = '';
+      renderExistingImages('');
       if (editorTitle) editorTitle.textContent = t('newCar');
       if (carSaveStatus) carSaveStatus.textContent = '';
       carEditor.hidden = false;
@@ -516,10 +519,51 @@ function editCar(id) {
   });
 
   if (editorTitle) editorTitle.textContent = t('editCar');
+  renderExistingImages(id);
   if (carSaveStatus) carSaveStatus.textContent = '';
   carEditor.hidden = false;
   carEditor.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+/* ========== Existing images (delete / choose primary) ========== */
+const existingBox = document.getElementById('existingImages');
+const sortedImgs = car => ((car && car.car_images) || []).slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+function renderExistingImages(carId) {
+  if (!existingBox) return;
+  const imgs = sortedImgs(adminCars.find(c => c.id === carId));
+  if (!carId || !imgs.length) { existingBox.innerHTML = ''; existingBox.hidden = true; return; }
+  existingBox.hidden = false;
+  existingBox.innerHTML = `<div class="ei-title">${esc(t('currentImages'))} <b>${imgs.length}/15</b></div><div class="ei-grid">`
+    + imgs.map((im, i) => `<figure class="ei-item ${i === 0 ? 'is-primary' : ''}"><img ${mediaAttrs(im)} alt="" loading="lazy" decoding="async"><figcaption>`
+      + (i === 0 ? `<span class="ei-badge">★ ${esc(t('primary'))}</span>` : `<button type="button" class="ei-btn" data-ei-primary="${esc(im.id)}">★ ${esc(t('makePrimary'))}</button>`)
+      + `<button type="button" class="ei-btn danger" data-ei-del="${esc(im.id)}" aria-label="${esc(t('delRev'))}">🗑</button></figcaption></figure>`).join('') + '</div>';
+}
+existingBox?.addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const carId = carForm.elements.id.value, imgs = sortedImgs(adminCars.find(c => c.id === carId));
+  try {
+    if (b.dataset.eiDel) {
+      if (!confirm(t('delImgConfirm'))) return;
+      const img = imgs.find(i => i.id === b.dataset.eiDel);
+      const { error } = await supabase.from('car_images').delete().eq('id', b.dataset.eiDel);
+      if (error) throw error;
+      if (img?.storage_key && workerUrl) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) fetch(`${workerUrl}/api/delete`, { method: 'POST', headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ key: img.storage_key }) }).catch(() => {});
+      }
+    } else if (b.dataset.eiPrimary) {
+      const order = [imgs.find(i => i.id === b.dataset.eiPrimary), ...imgs.filter(i => i.id !== b.dataset.eiPrimary)].filter(Boolean);
+      for (let i = 0; i < order.length; i++) { const { error } = await supabase.from('car_images').update({ sort_order: -(i + 1) }).eq('id', order[i].id); if (error) throw error; }
+      for (let i = 0; i < order.length; i++) { const { error } = await supabase.from('car_images').update({ sort_order: i }).eq('id', order[i].id); if (error) throw error; }
+    } else return;
+    await loadInventory();
+  } catch (err) {
+    console.error('[SA Admin] image op failed', err);
+    alert(/at least one image/i.test(err.message || '') ? t('lastImage') : (err.message || t('errorLoad')));
+    await loadInventory();
+  }
+  renderExistingImages(carId);
+});
 
 async function deleteCar(id) {
   if (!confirm(t('confirmDelete'))) return;
@@ -588,7 +632,21 @@ function bindForm() {
       };
 
       const selectedFiles = carForm.elements.photos.files;
-      if (selectedFiles && selectedFiles.length > 0 && !workerUrl) throw new Error('Cloudflare Worker URL non configurato.');
+      if (selectedFiles && selectedFiles.length > 0 && !workerUrl) throw new Error(t('noWorker'));
+      // قاعدة البيانات ترفض نشر سيارة بلا صورة رئيسية؛ لذلك نحفظ كمسودة أولاً، نرفع الصور، ثم ننشر.
+      const wantStatus = payload.status;
+      let existingImgs = [];
+      if (id) {
+        const r = await supabase.from('car_images').select('id,sort_order').eq('car_id', id);
+        if (r.error) throw r.error;
+        existingImgs = r.data || [];
+      }
+      const newCount = selectedFiles ? selectedFiles.length : 0;
+      if (existingImgs.length + newCount > 15) throw new Error(t('maxImages'));
+      if (wantStatus === 'published' && !existingImgs.length && !newCount) throw new Error(t('needImage'));
+      const deferPublish = wantStatus === 'published' && !existingImgs.some(i => (i.sort_order ?? 0) === 0);
+      if (deferPublish) payload.status = 'draft';
+      let nextOrder = existingImgs.length ? Math.max(...existingImgs.map(i => i.sort_order ?? 0)) + 1 : 0;
       let uploadSession = null;
       if (selectedFiles && selectedFiles.length > 0) {
         const sessionResult = await supabase.auth.getSession();
@@ -639,13 +697,13 @@ function bindForm() {
               storage_key: result.key,
               image_url: result.url,
               alt_text: file.name,
-              sort_order: i
+              sort_order: nextOrder
             });
             if (dbErr) {
               try { await fetch(`${workerUrl}/api/delete`, { method:'POST', headers:{ 'Authorization':'Bearer '+session.access_token, 'Content-Type':'application/json' }, body:JSON.stringify({ key:result.key }) }); } catch (cleanupError) { console.warn('[Upload] Orphan cleanup failed:', cleanupError); }
               throw dbErr;
             }
-            uploaded++;
+            uploaded++; nextOrder++;
           } catch (err) {
             console.error('[Upload] Failed:', file.name, err);
             failed++;
@@ -653,8 +711,20 @@ function bindForm() {
         }
       }
 
+      let stillDraft = false;
+      if (deferPublish) {
+        if (uploaded > 0) {
+          const { error: pubErr } = await supabase.from('cars').update({ status: 'published' }).eq('id', savedCar.id);
+          if (pubErr) { stillDraft = true; console.error('[SA Admin] publish failed', pubErr); }
+        } else stillDraft = true;
+        if (stillDraft) carForm.elements.status.value = 'draft';
+      }
+
       if (carSaveStatus) {
-        if (failed > 0) {
+        if (stillDraft) {
+          carSaveStatus.textContent = t('savedAsDraft');
+          carSaveStatus.className = 'status-msg error';
+        } else if (failed > 0) {
           carSaveStatus.textContent = t('savePartial', { ok: uploaded, fail: failed });
           carSaveStatus.className = 'status-msg error';
         } else if (uploaded > 0) {
@@ -666,7 +736,7 @@ function bindForm() {
         }
       }
 
-      if (failed > 0) {
+      if (failed > 0 || stillDraft) {
         carForm.elements.photos.value = '';
         carEditor.hidden = false;
       } else {
@@ -674,10 +744,12 @@ function bindForm() {
       }
       await loadInventory();
       await loadOverview();
+      renderExistingImages(carForm.elements.id.value);
 
     } catch (err) {
       console.error('[SA Admin] Form error:', err);
-      if (carSaveStatus) { carSaveStatus.textContent = err.message; carSaveStatus.className = 'status-msg error'; }
+      const em = /primary image/i.test(err.message || '') ? t('needImage') : (err.message || String(err));
+      if (carSaveStatus) { carSaveStatus.textContent = em; carSaveStatus.className = 'status-msg error'; }
     } finally {
       if (saveCarBtn) saveCarBtn.disabled = false;
     }
