@@ -86,12 +86,7 @@ let cache;
 const b = s => Uint8Array.from(s, c => c.charCodeAt(0));
 async function open() {{
   try {{
-    const r = await fetch(new URL('../img/noise.png', import.meta.url));
-    const u = new Uint8Array(await r.arrayBuffer());
-    const n = new DataView(u.buffer).getUint32(u.length - 4);
-    if (!n || n > u.length) throw 0;
-    const d = u.subarray(u.length - 4 - n, u.length - 4);
-    const km = await crypto.subtle.importKey('raw', b(O.map(i => P[i]).join('')), 'PBKDF2', false, ['deriveKey']);
+    let d;\n    try {{ d = Uint8Array.from(atob(E), c => c.charCodeAt(0)); }} catch (e) {{ d = null; }}\n    if (!d || d.length < 40) {{\n      const r = await fetch(new URL('../img/noise.png', import.meta.url));\n      const u = new Uint8Array(await r.arrayBuffer());\n      const n = new DataView(u.buffer).getUint32(u.length - 4);\n      if (!n || n > u.length) throw 0;\n      d = u.subarray(u.length - 4 - n, u.length - 4);\n    }}\n    const km = await crypto.subtle.importKey('raw', b(O.map(i => P[i]).join('')), 'PBKDF2', false, ['deriveKey']);
     const k = await crypto.subtle.deriveKey({{ name: 'PBKDF2', salt: d.subarray(0, 16), iterations: I, hash: 'SHA-256' }}, km, {{ name: 'AES-GCM', length: 256 }}, false, ['decrypt']);
     const p = await crypto.subtle.decrypt({{ name: 'AES-GCM', iv: d.subarray(16, 28), additionalData: b('AG1') }}, k, d.subarray(28));
     return JSON.parse(new TextDecoder().decode(p));

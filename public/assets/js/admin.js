@@ -189,6 +189,7 @@ function bindLogin() {
         btn.disabled = true;
 
         try {
+            if (!supabase) throw new Error('تعذّر تحميل إعدادات الاتصال بقاعدة البيانات. حدّث الصفحة (Ctrl+F5) وتأكد من اتصال الإنترنت ثم أعد المحاولة.');
             const { data, error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) throw error;
 
