@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sidahmed-auto — لوحة الإدارة">
+    <meta name="robots" content="noindex, nofollow, noarchive">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <title>لوحة الإدارة | Sidahmed-auto</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=DM+Sans:wght@400;500;700&family=Exo+2:ital,wght@0,700;0,800&display=swap" rel="stylesheet">
+
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/2.1.8/css/dataTables.dataTables.min.css">
+
+    <!-- App CSS (admin.css يحتوي على كل شيء: الثيمين، RTL، التحميل) -->
+    <link rel="stylesheet" href="assets/css/admin.css">
+</head>
+
+<body>
+
+    <!-- =========================================
+       SPLASH SCREEN (شاشة التحميل الأولية)
+       ========================================= -->
+    <div class="sa-splash" id="agSplash">
+        <img src="sidahmed-logo-crop.png" alt="Sidahmed-auto" class="sa-splash-logo">
+        <div class="sa-splash-spinner"></div>
+        <div class="sa-splash-text" data-i18n="loading">جارٍ التحميل...</div>
+    </div>
+
+    <!-- =========================================
+       LOGIN SCREEN
+       ========================================= -->
+    <div id="loginView" class="login-container">
+        <div class="login-card">
+            <div class="login-brand">
+                <img src="sidahmed-logo-crop.png" alt="Sidahmed-auto">
+            </div>
+            <h1 data-i18n="loginTitle">منطقة الإدارة</h1>
+            <p data-i18n="loginSubtitle">سجّل الدخول لإدارة معرض السيارات.</p>
+            <form id="loginForm" autocomplete="on" method="post" onsubmit="return false;">
+                <label class="sr-only" for="loginEmail">Email</label>
+                <input type="email" id="loginEmail" name="email" placeholder="البريد الإلكتروني" data-i18n-placeholder="email" autocomplete="username" required>
+
+                <label class="sr-only" for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" name="password" placeholder="كلمة المرور" data-i18n-placeholder="password" autocomplete="current-password" required>
+
+                <button type="submit" class="btn-primary" data-i18n="loginBtn">تسجيل الدخول</button>
+                <p id="loginError" class="error-msg" role="alert" aria-live="polite"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- =========================================
+       DASHBOARD SHELL
+       ========================================= -->
+    <div id="dashboardView" class="dashboard-shell" hidden>
+
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-head">
+                <div class="sidebar-brand"><img src="sidahmed-logo-crop.png" alt="Sidahmed-auto"></div>
+                <button type="button" class="sidebar-close" id="sidebarCloseBtn" aria-label="Close navigation">×</button>
+            </div>
+
+            <nav class="sidebar-nav" aria-label="Main navigation">
+                <button class="nav-item active" data-tab="overview">
+          <span class="nav-icon">▣</span>
+          <span data-i18n="navOverview">نظرة عامة</span>
+        </button>
+                <button class="nav-item" data-tab="inventory">
+          <span class="nav-icon">▤</span>
+          <span data-i18n="navInventory">السيارات</span>
+        </button>
+                <button class="nav-item" data-tab="leads">
+          <span class="nav-icon">✉</span>
+          <span data-i18n="navLeads">الطلبات</span>
+          <span class="nav-badge" id="leadsBadge" hidden>0</span>
+        </button>
+                <button class="nav-item" data-tab="reviews">
+          <span class="nav-icon">★</span>
+          <span data-i18n="navReviews">التقييمات</span>
+          <span class="nav-badge" id="reviewsBadge" hidden>0</span>
+        </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="session-info">
+                    <div class="session-avatar" id="sessionAvatar">A</div>
+                    <div class="session-meta">
+                        <strong id="sessionEmail">—</strong>
+                        <small data-i18n="adminRole">مسؤول</small>
+                    </div>
+                </div>
+                <button id="logoutBtn" class="logout-btn" data-i18n="logout">تسجيل الخروج</button>
+            </div>
+        </aside>
+
+        <button type="button" class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Close navigation"></button>
+
+        <!-- Main Area -->
+        <div class="main-area">
+
+            <!-- Topbar -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="icon-btn mobile-menu-btn" id="mobileMenuBtn" aria-label="Menu" aria-expanded="false" aria-controls="sidebar">☰</button>
+                    <h2 id="pageTitle" data-i18n="navOverview">نظرة عامة</h2>
+                </div>
+                <div class="topbar-right">
+                    <select id="languageSelect" class="topbar-select" aria-label="Language" data-i18n-label="language">
+            <option value="ar">AR</option>
+            <option value="en">EN</option>
+            <option value="fr">FR</option>
+          </select>
+                    <button id="themeToggle" class="icon-btn" aria-label="Toggle theme" title="Theme">
+            <span id="themeIcon">☼</span>
+          </button>
+                </div>
+            </header>
+
+            <!-- TAB: OVERVIEW -->
+            <section id="tab-overview" class="tab-content active">
+                <div class="stats-grid">
+                    <article class="stat-card">
+                        <span data-i18n="statPublished">السيارات المنشورة</span>
+                        <strong id="statPublished">—</strong>
+                    </article>
+                    <article class="stat-card">
+                        <span data-i18n="statDrafts">المسودات</span>
+                        <strong id="statDrafts">—</strong>
+                    </article>
+                    <article class="stat-card">
+                        <span data-i18n="statLeads">إجمالي الطلبات</span>
+                        <strong id="statLeads">—</strong>
+                    </article>
+                    <article class="stat-card">
+                        <span data-i18n="statReviews">تقييمات بانتظار المراجعة</span>
+                        <strong id="statReviews">—</strong>
+                    </article>
+                </div>
+
+                <div class="overview-grid">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3 data-i18n="recentCars">أحدث السيارات المضافة</h3>
+                        </div>
+                        <div id="recentCarsList" class="recent-list"></div>
+                    </div>
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3 data-i18n="recentLeads">أحدث الطلبات</h3>
+                        </div>
+                        <div id="recentLeadsList" class="recent-list"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: INVENTORY -->
+            <section id="tab-inventory" class="tab-content">
+
+                <div class="action-bar">
+                    <button class="btn-primary" id="btnNewCar" data-i18n="addCar">+ إضافة سيارة</button>
+                </div>
+
+                <!-- Car Editor Form -->
+                <div id="carEditor" class="car-editor" hidden>
+                    <div class="editor-header">
+                        <h3 id="editorTitle" data-i18n="newCar">سيارة جديدة</h3>
+                        <button class="close-editor" id="cancelCarEdit" aria-label="Close">×</button>
+                    </div>
+                    <form id="carForm" class="car-form" method="post" onsubmit="return false;">
+                        <input type="hidden" name="id">
+
+                        <fieldset class="form-section">
+                            <legend data-i18n="sectionBasic">معلومات أساسية</legend>
+                            <div class="form-grid">
+                                <label><span data-i18n="brand">الماركة *</span><input name="brand" required maxlength="60" placeholder="Mercedes"></label>
+                                <label><span data-i18n="model">الموديل *</span><input name="model" required maxlength="100" placeholder="C 200"></label>
+                                <label><span data-i18n="year">السنة *</span><input name="year" type="number" min="1886" max="2100" required></label>
+                                <label><span data-i18n="price">السعر (دج)</span><input name="price" type="number" min="0" step="1000" placeholder="0"></label>
+                            </div>
+                        </fieldset>
+
+                        <fieldset class="form-section">
+                            <legend data-i18n="sectionTechnical">بيانات تقنية</legend>
+                            <div class="form-grid">
+                                <label><span data-i18n="mileage">المسافة المقطوعة (كم)</span><input name="mileage" type="number" min="0" placeholder="0"></label>
+                                <label><span data-i18n="fuel">الوقود</span><select name="fuel"><option value="" data-i18n="choose">— اختر —</option><option value="petrol" data-i18n="fuel_petrol">بنزين</option><option value="diesel" data-i18n="fuel_diesel">ديزل</option><option value="hybrid" data-i18n="fuel_hybrid">هجينة</option><option value="electric" data-i18n="fuel_electric">كهربائية</option><option value="lpg" data-i18n="fuel_lpg">غاز (GPL)</option></select></label>
+                                <label><span data-i18n="transmission">ناقل الحركة</span><select name="transmission"><option value="" data-i18n="choose">— اختر —</option><option value="auto" data-i18n="gear_auto">أوتوماتيك</option><option value="manual" data-i18n="gear_manual">يدوي</option></select></label>
+                                <label><span data-i18n="horsepower">القوة (حصان)</span><input name="horsepower" type="number" min="0"></label>
+                                <label><span data-i18n="bodyType">نوع الهيكل</span><input name="body_type" placeholder="Coupé / Sedan"></label>
+                                <label><span data-i18n="color">اللون</span><input name="color" placeholder="أسود / Black"></label>
+                            </div>
+                        </fieldset>
+
+                        <fieldset class="form-section">
+                            <legend data-i18n="sectionClassification">التصنيف</legend>
+                            <div class="form-grid">
+                                <label><span data-i18n="category">الفئة</span>
+                  <select name="category">
+                    <option value="premium" data-i18n="cat_premium">فاخرة</option>
+                    <option value="sport" data-i18n="cat_sport">رياضية</option>
+                    <option value="suv" data-i18n="cat_suv">دفع رباعي SUV</option>
+                    <option value="berlina" data-i18n="cat_berlina">سيدان</option>
+                    <option value="city" data-i18n="cat_city">سيارة مدينة</option>
+                  </select>
+                </label>
+                                <label><span data-i18n="status">الحالة</span>
+                  <select name="status">
+                    <option value="draft" data-i18n="draft">مسودة</option>
+                    <option value="published" data-i18n="published">منشورة</option>
+                    <option value="sold" data-i18n="sold">مباعة</option>
+                  </select>
+                </label>
+                            </div>
+                        </fieldset>
+
+                        <fieldset class="form-section">
+                            <legend data-i18n="sectionDetails">التفاصيل</legend>
+                            <label class="full-width"><span data-i18n="description">الوصف</span><textarea name="description" rows="4" placeholder="…"></textarea></label>
+                            <label class="full-width"><span data-i18n="photos">الصور</span><input name="photos" type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple><small data-i18n="photosHint">JPEG أو PNG أو WebP أو AVIF · الحد الأقصى 10 ميغابايت.</small></label>
+                        </fieldset>
+
+                        <div class="editor-actions">
+                            <button type="submit" class="btn-primary" id="saveCarBtn" data-i18n="saveCar">حفظ السيارة</button>
+                            <span id="carSaveStatus" class="status-msg" role="status" aria-live="polite"></span>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Table toolbar -->
+                <div class="table-toolbar">
+                    <div class="table-search-wrap">
+                        <input type="search" id="tableSearch" placeholder="ابحث بالماركة أو الموديل..." data-i18n-placeholder="searchPlaceholder">
+                    </div>
+                    <div class="table-filter-wrap">
+                        <select id="statusFilter" class="table-filter">
+              <option value="" data-i18n="filterAllStatus">جميع الحالات</option>
+              <option value="published" data-i18n="published">منشورة</option>
+              <option value="draft" data-i18n="draft">مسودة</option>
+              <option value="sold" data-i18n="sold">مباعة</option>
+            </select>
+                        <select id="categoryFilter" class="table-filter">
+              <option value="" data-i18n="filterAllCategories">جميع الفئات</option>
+              <option value="premium" data-i18n="cat_premium">فاخرة</option>
+                    <option value="sport" data-i18n="cat_sport">رياضية</option>
+                    <option value="suv" data-i18n="cat_suv">دفع رباعي SUV</option>
+                    <option value="berlina" data-i18n="cat_berlina">سيدان</option>
+                    <option value="city" data-i18n="cat_city">سيارة مدينة</option>
+            </select>
+                    </div>
+                </div>
+
+                <!-- Data Table -->
+                <div class="table-container">
+                    <table id="carsTable" class="display" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th data-i18n="photo">الصورة</th>
+                                <th data-i18n="brandModel">الماركة / الموديل</th>
+                                <th data-i18n="year">السنة *</th>
+                                <th data-i18n="price">السعر (دج)</th>
+                                <th data-i18n="status">الحالة</th>
+                                <th data-i18n="actions">الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="carsTableBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- TAB: LEADS -->
+            <section id="tab-leads" class="tab-content">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3 data-i18n="leadsTitle">الطلبات الواردة</h3>
+                    </div>
+                    <div id="leadsList" class="leads-list">
+                        <p class="placeholder-text" data-i18n="comingSoon">قريباً.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: REVIEWS -->
+            <section id="tab-reviews" class="tab-content">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3 data-i18n="reviewsTitle">تقييمات العملاء</h3>
+                    </div>
+                    <div id="reviewsList" class="reviews-list">
+                        <p class="placeholder-text" data-i18n="comingSoon">قريباً.</p>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+    <!-- Vehicle details dialog -->
+    <div class="vehicle-modal" id="vehicleModal" hidden aria-hidden="true">
+        <div class="vehicle-modal-backdrop" data-close-vehicle></div>
+        <section class="vehicle-modal-card" role="dialog" aria-modal="true" aria-labelledby="vehicleModalTitle">
+            <header class="vehicle-modal-header">
+                <h2 id="vehicleModalTitle">Vehicle details</h2>
+                <button type="button" class="close-editor" id="closeVehicleModal" aria-label="Close">×</button>
+            </header>
+            <div id="vehicleModalContent" class="vehicle-modal-content"></div>
+            <footer class="vehicle-modal-actions">
+                <button type="button" class="btn-primary" id="vehicleModalEdit" data-i18n="vehicleEdit">تعديل السيارة</button>
+            </footer>
+        </section>
+    </div>
+
+    <!-- =========================================
+       SCRIPTS (الترتيب إلزامي)
+       ========================================= -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
+    <script type="module" src="assets/js/admin.js"></script>
+</body>
+
+</html>

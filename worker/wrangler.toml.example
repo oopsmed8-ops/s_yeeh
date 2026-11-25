@@ -1,0 +1,16 @@
+# Copia in worker/wrangler.toml. I segreti NON vanno qui: usa `wrangler secret put`.
+name = "sidahmed-auto-upload"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "NOME-DEL-TUO-BUCKET"
+
+[vars]
+SUPABASE_URL = "https://TUO-PROGETTO.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "sb_publishable_..."
+# Origini ammesse (separate da virgola): il sito su Render e, poi, il dominio definitivo
+ALLOWED_ORIGIN = "https://sidahmed-auto.onrender.com"
+
+# Segreto (solo da terminale):  wrangler secret put SUPABASE_SECRET_KEY

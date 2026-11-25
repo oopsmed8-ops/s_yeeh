@@ -1,0 +1,10 @@
+# Mai pubblicare segreti
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+__pycache__/
+.wrangler/
+.dev.vars
+*.zip
