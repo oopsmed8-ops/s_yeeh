@@ -1,5 +1,5 @@
 import { t, tr, money as fmtMoney, locale, getLang } from './i18n.js';
-import { workerUrl, withRetry } from './client.js';
+import { workerUrl, withRetry, lastError } from './client.js';
 import { SITE, waLink } from './site-config.js';
 
 const $ = s => document.querySelector(s);
@@ -66,7 +66,7 @@ export async function initGallery(supabase) {
     if (!error && data) { cars = data; try { sessionStorage.setItem(CK, JSON.stringify(data)); } catch {} }
     else { try { cars = JSON.parse(sessionStorage.getItem(CK) || '[]'); } catch { cars = []; } }
     if (error && !cars.length) {
-      grid.innerHTML = `<div class="state"><p>${t('loadErr')}</p><button type="button" class="outline" id="retryCars" style="margin-top:16px">↻ ${getLang() === 'ar' ? 'إعادة المحاولة' : getLang() === 'fr' ? 'Réessayer' : 'Retry'}</button></div>`;
+      grid.innerHTML = `<div class="state"><p>${t('loadErr')}</p>${lastError ? `<p dir="ltr" style="font-size:12px;opacity:.6;margin-top:8px">${esc(lastError)}</p>` : ''}<button type="button" class="outline" id="retryCars" style="margin-top:16px">↻ ${getLang() === 'ar' ? 'إعادة المحاولة' : getLang() === 'fr' ? 'Réessayer' : 'Retry'}</button></div>`;
       $('#retryCars').onclick = () => { grid.innerHTML = '<div class="skeleton"></div>'.repeat(3); loadCars(); };
       return;
     }

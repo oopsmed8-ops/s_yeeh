@@ -12,6 +12,10 @@ services:
       - type: rewrite
         source: /media/*
         destination: https://auto-granato-upload.goko07339.workers.dev/images/*
+      # Same-origin Supabase proxy: fallback for networks that block *.supabase.co.
+      - type: rewrite
+        source: /sb/*
+        destination: https://ldjesrpnhnrwuxfzwldu.supabase.co/*
     envVars:
       - key: SITE_DOMAIN
         value: sidahmed-auto.onrender.com   # change to your final domain once connected

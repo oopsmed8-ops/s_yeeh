@@ -9,7 +9,17 @@ const LIB = [
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 export let workerUrl = '';
+export let lastError = '';
 let clientPromise;
+
+// هل يصل الهاتف إلى Supabase مباشرة؟ بعض الشبكات تحجب النطاق؛ عندها نمرّ عبر /sb على نفس نطاق الموقع.
+async function reachable(base, key) {
+  const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), 7000);
+  try {
+    const r = await fetch(`${base}/auth/v1/settings`, { headers: { apikey: key }, signal: ac.signal, cache: 'no-store' });
+    return r.ok;
+  } catch { return false; } finally { clearTimeout(tm); }
+}
 
 async function create() {
   let cfg = {};
@@ -20,10 +30,15 @@ async function create() {
   }
   if (!cfg.SUPABASE_URL || !cfg.SUPABASE_PUBLISHABLE_KEY) return null;
   workerUrl = (cfg.WORKER_URL || '').replace(/\/+$/, '');
+  let base = cfg.SUPABASE_URL.replace(/\/+$/, '');
+  if (!(await reachable(base, cfg.SUPABASE_PUBLISHABLE_KEY))) {
+    const proxy = location.origin + '/sb';
+    if (await reachable(proxy, cfg.SUPABASE_PUBLISHABLE_KEY)) { base = proxy; console.warn('[SA] using same-origin proxy'); }
+  }
   for (let i = 0; i < 4; i++) {
     try {
       const { createClient } = await import(/* @vite-ignore */ LIB[i % LIB.length]);
-      return createClient(cfg.SUPABASE_URL, cfg.SUPABASE_PUBLISHABLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+      return createClient(base, cfg.SUPABASE_PUBLISHABLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
     } catch (e) { console.warn('[SA] supabase lib retry', i + 1, e); await sleep(700 * (i + 1)); }
   }
   return null;
@@ -37,8 +52,8 @@ export async function withRetry(fn, tries = 3, timeout = 12000) {
     try {
       const res = await Promise.race([fn(), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), timeout))]);
       if (!res.error) return res;
-      last = res;
-    } catch (e) { last = { data: null, error: e }; }
+      last = res; lastError = [res.error.code, res.error.message].filter(Boolean).join(' · ');
+    } catch (e) { last = { data: null, error: e }; lastError = String(e.message || e); }
     await sleep(800 * (i + 1));
   }
   return last;

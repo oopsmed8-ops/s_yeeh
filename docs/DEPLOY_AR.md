@@ -66,3 +66,8 @@ python3 tools/build-config.py --worker-url https://رابط-الworker
 الصور تُطلب الآن من `/media/…` على نفس نطاق الموقع، وRender يمرّرها إلى Worker عبر `routes` في `render.yaml`.
 إن كانت الخدمة منشأة يدوياً (ليست Blueprint) أضف في Render ← Redirects/Rewrites:
 `/media/*` ← Rewrite ← `https://auto-granato-upload.goko07339.workers.dev/images/*`
+
+## ظهور السيارات على الهاتف
+1. شغّل `database/fix-public-read.sql` في Supabase ← SQL Editor (يضمن قراءة الزوار للسيارات المنشورة).
+2. تأكد أن حالة السيارات في الأدمن **published** (نشر) وليست مسودة.
+3. أضف في Render (إن لم تكن الخدمة Blueprint) Rewrite ثانٍ: `/sb/*` ← `https://ldjesrpnhnrwuxfzwldu.supabase.co/*` (احتياطي للشبكات التي تحجب supabase.co).
