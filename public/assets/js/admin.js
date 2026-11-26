@@ -639,15 +639,25 @@ async function probeWorker() {
     return { ok: false, reason: t('upNet', { origin: location.origin }) };
   } finally { clearTimeout(tm); }
 }
-async function uploadOne(file, token) {
-  let res;
-  try { res = await fetch(workerUrl + '/api/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': file.type }, body: file }); }
-  catch { throw new Error(t('upNet', { origin: location.origin })); }
+async function uploadOne(item, token) {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let res, lastErr;
+  for (let attempt = 0; attempt < 3 && !res; attempt++) {
+    try {
+      res = await fetch(workerUrl + '/api/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': item.type }, body: item.buf });
+    } catch (e) { lastErr = e; console.warn('[Upload] network error, attempt', attempt + 1, e); await sleep(900 * (attempt + 1)); }
+  }
+  if (!res) {
+    // هل الخادم نفسه يعمل؟ إن كان يعمل فالمشكلة انقطاع أثناء الرفع أو خطأ داخل الـ Worker وليست ALLOWED_ORIGIN
+    const pr = await probeWorker();
+    if (pr.ok) throw new Error(t('upDrop', { kb: Math.round(item.buf.length / 1024), err: (lastErr && lastErr.message) || '' }));
+    throw new Error(pr.reason);
+  }
   const txt = await res.text(); let j = null; try { j = JSON.parse(txt); } catch {}
   if (!res.ok) {
     if (res.status === 401) throw new Error(t('sessionExpired'));
     if (res.status === 403) throw new Error(j?.error ? t('upAdmin') : t('upNet', { origin: location.origin }));
-    throw new Error(t('upHttp', { msg: (j?.error || txt || '').slice(0, 140) + ' (HTTP ' + res.status + ')' }));
+    throw new Error(t('upHttp', { msg: (j?.error || txt || '').slice(0, 160) + ' (HTTP ' + res.status + ')' }));
   }
   if (!j?.key) throw new Error(t('upHttp', { msg: txt.slice(0, 140) }));
   return j;
@@ -685,7 +695,17 @@ function bindForm() {
       const selectedFiles = carForm.elements.photos.files;
       if (selectedFiles && selectedFiles.length > 0 && !workerUrl) throw new Error(t('noWorker'));
       // قاعدة البيانات ترفض نشر سيارة بلا صورة رئيسية؛ لذلك نحفظ كمسودة أولاً، نرفع الصور، ثم ننشر.
+      // نقرأ كل الصور ونضغطها في الذاكرة فوراً: بعض هواتف أندرويد تفقد الوصول لملف المعرض إن تأخر رفعه (ERR_UPLOAD_FILE_CHANGED)
+      const prepList = []; const reasons = [];
       if (selectedFiles && selectedFiles.length > 0) {
+        if (carSaveStatus) carSaveStatus.textContent = t('upPreparing');
+        for (const file of Array.from(selectedFiles)) {
+          try {
+            const f = await prepareImage(file);
+            prepList.push({ name: file.name, type: f.type, buf: new Uint8Array(await f.arrayBuffer()) });
+          } catch (err) { console.error('[Upload] prepare failed', file.name, err); reasons.push(err.message && /:/.test(err.message) ? err.message : `${file.name}: ${t('upRead')}`); }
+        }
+        if (!prepList.length) throw new Error(reasons.join('\n'));
         if (carSaveStatus) carSaveStatus.textContent = t('upChecking');
         const pr = await probeWorker(); if (!pr.ok) throw new Error(pr.reason);
       }
@@ -696,7 +716,7 @@ function bindForm() {
         if (r.error) throw r.error;
         existingImgs = r.data || [];
       }
-      const newCount = selectedFiles ? selectedFiles.length : 0;
+      const newCount = prepList.length;
       if (existingImgs.length + newCount > 15) throw new Error(t('maxImages'));
       if (wantStatus === 'published' && !existingImgs.length && !newCount) throw new Error(t('needImage'));
       const deferPublish = wantStatus === 'published' && !existingImgs.some(i => (i.sort_order ?? 0) === 0);
@@ -722,18 +742,16 @@ function bindForm() {
       carForm.elements.id.value = savedCar.id;
 
       // Image Upload
-      const files = carForm.elements.photos.files;
-      let uploaded = 0, failed = 0; const reasons = [];
+      let uploaded = 0, failed = reasons.length;
 
-      if (files && files.length > 0 && workerUrl) {
+      if (prepList.length > 0 && workerUrl) {
         const session = uploadSession;
 
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
+        for (let i = 0; i < prepList.length; i++) {
+          const file = prepList[i];
           try {
-            if (carSaveStatus) carSaveStatus.textContent = t('uploading', { i: i + 1, n: files.length });
-            const prepared = await prepareImage(file);
-            const result = await uploadOne(prepared, session.access_token);
+            if (carSaveStatus) carSaveStatus.textContent = t('uploading', { i: i + 1, n: prepList.length });
+            const result = await uploadOne(file, session.access_token);
 
             const { error: dbErr } = await supabase.from('car_images').insert({
               car_id: savedCar.id,

@@ -5,8 +5,7 @@
 const EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/avif": "avif", "image/gif": "gif" };
 const KEY_RE = /^images\/[a-f0-9-]+\.(jpg|png|webp|avif|gif)$/;
 
-export default {
-  async fetch(request, env) {
+async function handle(request, env) {
     const url = new URL(request.url);
     const origin = request.headers.get("Origin") || "";
     const list = String(env.ALLOWED_ORIGIN || "").split(",").map(v => v.trim()).filter(Boolean);
@@ -28,7 +27,7 @@ export default {
     if (url.pathname === "/api/health") {
       return json({
         ok: Boolean(env.BUCKET && env.SUPABASE_URL && env.SUPABASE_PUBLISHABLE_KEY),
-        version: "v3-admin-check-fixed",
+        version: "v4-safe",
         bucket: Boolean(env.BUCKET),
         supabaseConfigured: Boolean(env.SUPABASE_URL && env.SUPABASE_PUBLISHABLE_KEY)
       });
@@ -98,5 +97,17 @@ export default {
     }
 
     return json({ error: "Not found", path: url.pathname, method: request.method }, 404);
+}
+
+export default {
+  async fetch(request, env) {
+    try { return await handle(request, env); }
+    catch (e) {
+      // أي خطأ داخلي يُعاد كـ JSON مع ترويسات CORS حتى يظهر سببه بدل «Failed to fetch»
+      return new Response(JSON.stringify({ error: "Worker error: " + ((e && e.message) || String(e)) }), {
+        status: 500,
+        headers: { "Access-Control-Allow-Origin": request.headers.get("Origin") || "*", "Content-Type": "application/json; charset=utf-8", "Vary": "Origin" }
+      });
+    }
   }
 };
