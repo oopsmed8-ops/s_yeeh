@@ -16,7 +16,11 @@ export default {
     // http://127.0.0.1:8088,https://www.your-domain.com
     const allowedOrigins = String(env.ALLOWED_ORIGIN || "")
       .split(",").map(value => value.trim()).filter(Boolean);
-    const corsOrigin = allowedOrigins.includes(origin) ? origin : "null";
+    // Entries may be exact origins, "*" (any origin: uploads still require an admin bearer token),
+    // or a wildcard subdomain pattern such as https://*.onrender.com
+    const isAllowed = o => allowedOrigins.some(a => a === "*" || a === o ||
+      (a.includes("*.") && new RegExp("^" + a.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace("*", "[a-z0-9-]+") + "$").test(o)));
+    const corsOrigin = isAllowed(origin) ? origin : "null";
     const cors = {
       "Access-Control-Allow-Origin": corsOrigin,
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -27,7 +31,7 @@ export default {
     const json = (data, status = 200, extra = {}) =>
       new Response(JSON.stringify(data), { status, headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...extra } });
 
-    if (origin && !allowedOrigins.includes(origin)) return new Response("Origin not allowed", { status: 403, headers: cors });
+    if (origin && !isAllowed(origin)) return new Response("Origin not allowed", { status: 403, headers: cors });
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (url.pathname === "/api/health" && request.method === "GET") {
       const bucket = Boolean(env.BUCKET);

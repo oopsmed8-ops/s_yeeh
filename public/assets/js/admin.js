@@ -602,6 +602,57 @@ async function deleteCar(id) {
   }
 }
 
+
+/* ========== Image upload helpers (diagnostics + client-side compression) ========== */
+const ALLOWED_TYPES = /^image\/(jpeg|png|webp|avif)$/;
+const MAX_BYTES = 10 * 1024 * 1024;
+// يصغّر الصور الكبيرة ويحوّل الأنواع غير المدعومة إلى JPEG قبل الرفع (يسرّع الرفع على الهاتف ويتجاوز حد 10MB)
+async function prepareImage(file) {
+  if (ALLOWED_TYPES.test(file.type) && file.size <= 2.5 * 1024 * 1024) return file;
+  let bmp;
+  try { bmp = await createImageBitmap(file); } catch { bmp = null; }
+  if (!bmp) {
+    if (ALLOWED_TYPES.test(file.type) && file.size <= MAX_BYTES) return file;
+    throw new Error(t('upType', { name: file.name }));
+  }
+  const max = 2200, k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+  cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height); bmp.close?.();
+  const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.86));
+  if (!blob || blob.size > MAX_BYTES) throw new Error(t('upBig', { name: file.name }));
+  return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+}
+// فحص خادم رفع الصور قبل أي حفظ، حتى لا تُنشأ سيارة ثم يفشل الرفع بلا سبب واضح
+async function probeWorker() {
+  if (!workerUrl) return { ok: false, reason: t('noWorker') };
+  const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 9000);
+  try {
+    const r = await fetch(workerUrl + '/api/health', { signal: ac.signal, cache: 'no-store' });
+    const j = await r.json().catch(() => null);
+    if (!r.ok && !j) return { ok: false, reason: t('upHttp', { msg: 'HTTP ' + r.status }) };
+    if (j && j.ok === false) {
+      const miss = [j.bucket === false && 'R2 BUCKET', j.supabaseConfigured === false && 'SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY / SUPABASE_SECRET_KEY'].filter(Boolean).join(' + ');
+      return { ok: false, reason: t('upHealth', { what: miss || '?' }) };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: t('upNet', { origin: location.origin }) };
+  } finally { clearTimeout(tm); }
+}
+async function uploadOne(file, token) {
+  let res;
+  try { res = await fetch(workerUrl + '/api/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': file.type }, body: file }); }
+  catch { throw new Error(t('upNet', { origin: location.origin })); }
+  const txt = await res.text(); let j = null; try { j = JSON.parse(txt); } catch {}
+  if (!res.ok) {
+    if (res.status === 401) throw new Error(t('sessionExpired'));
+    if (res.status === 403) throw new Error(j?.error ? t('upAdmin') : t('upNet', { origin: location.origin }));
+    throw new Error(t('upHttp', { msg: (j?.error || txt || '').slice(0, 140) + ' (HTTP ' + res.status + ')' }));
+  }
+  if (!j?.key) throw new Error(t('upHttp', { msg: txt.slice(0, 140) }));
+  return j;
+}
+
 /* ========== Form Submission & Upload ========== */
 function bindForm() {
   if (!carForm) return;
@@ -634,6 +685,10 @@ function bindForm() {
       const selectedFiles = carForm.elements.photos.files;
       if (selectedFiles && selectedFiles.length > 0 && !workerUrl) throw new Error(t('noWorker'));
       // قاعدة البيانات ترفض نشر سيارة بلا صورة رئيسية؛ لذلك نحفظ كمسودة أولاً، نرفع الصور، ثم ننشر.
+      if (selectedFiles && selectedFiles.length > 0) {
+        if (carSaveStatus) carSaveStatus.textContent = t('upChecking');
+        const pr = await probeWorker(); if (!pr.ok) throw new Error(pr.reason);
+      }
       const wantStatus = payload.status;
       let existingImgs = [];
       if (id) {
@@ -668,29 +723,17 @@ function bindForm() {
 
       // Image Upload
       const files = carForm.elements.photos.files;
-      let uploaded = 0, failed = 0;
+      let uploaded = 0, failed = 0; const reasons = [];
 
       if (files && files.length > 0 && workerUrl) {
         const session = uploadSession;
 
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
-          if (!/^image\/(jpeg|png|webp|avif)$/.test(file.type) || file.size > 10 * 1024 * 1024) {
-            failed++;
-            continue;
-          }
-
           try {
-            const res = await fetch(workerUrl + '/api/upload', {
-              method: 'POST',
-              headers: {
-                'Authorization': 'Bearer ' + session.access_token,
-                'Content-Type': file.type
-              },
-              body: file
-            });
-            const result = await res.json();
-            if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+            if (carSaveStatus) carSaveStatus.textContent = t('uploading', { i: i + 1, n: files.length });
+            const prepared = await prepareImage(file);
+            const result = await uploadOne(prepared, session.access_token);
 
             const { error: dbErr } = await supabase.from('car_images').insert({
               car_id: savedCar.id,
@@ -701,12 +744,12 @@ function bindForm() {
             });
             if (dbErr) {
               try { await fetch(`${workerUrl}/api/delete`, { method:'POST', headers:{ 'Authorization':'Bearer '+session.access_token, 'Content-Type':'application/json' }, body:JSON.stringify({ key:result.key }) }); } catch (cleanupError) { console.warn('[Upload] Orphan cleanup failed:', cleanupError); }
-              throw dbErr;
+              throw new Error(t('upDb', { msg: dbErr.message || dbErr.code || '' }));
             }
             uploaded++; nextOrder++;
           } catch (err) {
             console.error('[Upload] Failed:', file.name, err);
-            failed++;
+            failed++; reasons.push(`${file.name}: ${err.message || err}`);
           }
         }
       }
@@ -722,10 +765,10 @@ function bindForm() {
 
       if (carSaveStatus) {
         if (stillDraft) {
-          carSaveStatus.textContent = t('savedAsDraft');
+          carSaveStatus.textContent = t('savedAsDraft') + (reasons.length ? '\n' + reasons.join('\n') : '');
           carSaveStatus.className = 'status-msg error';
         } else if (failed > 0) {
-          carSaveStatus.textContent = t('savePartial', { ok: uploaded, fail: failed });
+          carSaveStatus.textContent = t('savePartial', { ok: uploaded, fail: failed }) + (reasons.length ? '\n' + reasons.join('\n') : '');
           carSaveStatus.className = 'status-msg error';
         } else if (uploaded > 0) {
           carSaveStatus.textContent = t('saveSuccessWithImages', { count: uploaded });

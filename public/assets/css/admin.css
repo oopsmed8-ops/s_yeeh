@@ -1657,3 +1657,5 @@ img, video, canvas, svg { max-width: 100%; }
   #carsTable .img-loading-wrap { height: 62px; border-radius: 8px; overflow: hidden; position: relative; }
   #carsTable .car-thumb { height: 100%; object-fit: cover; }
 }
+
+#carSaveStatus, .status-msg { white-space: pre-wrap; line-height: 1.7; flex: 1 1 100%; }
