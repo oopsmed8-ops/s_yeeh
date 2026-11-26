@@ -261,10 +261,11 @@ fieldset{border:0;display:grid;gap:8px}legend{font-size:13px;color:var(--text-se
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.reveal{opacity:1;transform:none}.hero-car path{stroke-dashoffset:0}}
 
 /* ===== Mobile hardening (public) ===== */
-html,body{max-width:100%;overflow-x:hidden}
+html{max-width:100%}
+body{max-width:100%;overflow-x:clip}
+@supports not (overflow:clip){body{overflow-x:hidden}}
 img,video,svg{max-width:100%}
 .nav>*{min-width:0}
-.nav>a:first-child img,.brand img,.logo img{max-width:100%;height:auto}
 .card-form,.card-form *{min-width:0}
 .card-form input,.card-form select,.card-form textarea{width:100%;max-width:100%}
 p,h1,h2,h3,h4,li,blockquote,.car-info h3{overflow-wrap:anywhere}
@@ -279,3 +280,6 @@ p,h1,h2,h3,h4,li,blockquote,.car-info h3{overflow-wrap:anywhere}
   .language-select{max-width:58px}
   .nav>a:first-child{flex:1 1 auto;min-width:0;max-width:110px}
 }
+
+/* أرقام الهاتف تبقى بترتيبها الصحيح داخل الصفحات العربية (+213 550 …) */
+[data-site="phone"],[data-site="whatsapp"],a[href^="tel:"],.nav-call span{direction:ltr;unicode-bidi:isolate;white-space:nowrap}
